@@ -242,7 +242,7 @@ def _render_efficiency_trend(df_daily: pd.DataFrame) -> None:
             line=dict(color=_GREEN, width=2.5),
             marker=dict(size=4),
             fill="tozeroy",
-            fillcolor=_GREEN + "15",
+            fillcolor="rgba(63,185,80,0.08)",
         ))
         fig.add_hline(y=1, line_dash="dot", line_color=_RED, opacity=0.6,
                       annotation_text="Break-even", annotation_font_size=10,
