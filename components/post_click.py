@@ -4,14 +4,21 @@ import plotly.graph_objects as go
 import pandas as pd
 from utils.data import fmt_currency, fmt_pct, fmt_number
 
-_COLORS = {"Google Ads": "#4285F4", "Meta Ads": "#1877F2"}
-_LAYOUT = dict(
-    plot_bgcolor="rgba(0,0,0,0)",
-    paper_bgcolor="rgba(0,0,0,0)",
-    font_color="#E8EAED",
-    margin=dict(t=40, b=20, l=0, r=0),
-    legend=dict(orientation="h", y=1.12, bgcolor="rgba(0,0,0,0)"),
-)
+_COLORS = {"Google Ads": "#4285F4", "Meta Ads": "#FF6B35"}
+
+def _L(**kw) -> dict:
+    cfg = dict(
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        font_color="#C9D1D9", margin=dict(t=36, b=20, l=0, r=8),
+        legend=dict(orientation="h", y=1.15, bgcolor="rgba(0,0,0,0)", font_size=11),
+        hoverlabel=dict(bgcolor="#161B22", bordercolor="#30363D", font_size=12),
+        xaxis=dict(gridcolor="#21262D", tickfont_size=11, zeroline=False),
+        yaxis=dict(gridcolor="#21262D", tickfont_size=11, zeroline=False),
+    )
+    cfg.update(kw)
+    return cfg
+
+_LAYOUT = _L()  # backwards compat
 
 
 def render_kpis(df: pd.DataFrame) -> None:

@@ -214,12 +214,7 @@ with tab_pre:
         st.divider()
         pre_click.render_full_funnel(df_merged, _ga4_display)
         st.divider()
-        col1, col2 = st.columns(2)
-        with col1:
-            pre_click.render_spend_chart(df_daily)
-        with col2:
-            pre_click.render_ctr_trend(df_daily)
-        pre_click.render_platform_comparison(df_platform)
+        pre_click.render_channel_performance(df_daily, df_platform)
         st.divider()
         pre_click.render_week_over_week(df_merged)
         st.divider()

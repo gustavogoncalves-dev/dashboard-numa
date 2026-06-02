@@ -4,168 +4,185 @@ import plotly.graph_objects as go
 import pandas as pd
 from utils.data import fmt_currency, fmt_pct, fmt_number, get_week_comparison, agg_totals
 
-_COLORS = {"Google Ads": "#4285F4", "Meta Ads": "#1877F2"}
-_LAYOUT = dict(
-    plot_bgcolor="rgba(0,0,0,0)",
-    paper_bgcolor="rgba(0,0,0,0)",
-    font_color="#E8EAED",
-    margin=dict(t=40, b=20, l=0, r=0),
-    legend=dict(orientation="h", y=1.12, bgcolor="rgba(0,0,0,0)"),
-)
+# Google azul, Meta laranja — cores visivelmente distintas
+_COLORS = {"Google Ads": "#4285F4", "Meta Ads": "#FF6B35"}
+_GREEN  = "#3FB950"
+_RED    = "#F85149"
 
 
+def _L(**kw) -> dict:
+    """Chart layout factory — evita conflitos de kwargs duplicados."""
+    cfg = dict(
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font_color="#C9D1D9",
+        margin=dict(t=36, b=20, l=0, r=8),
+        legend=dict(orientation="h", y=1.15, bgcolor="rgba(0,0,0,0)", font_size=11),
+        hoverlabel=dict(bgcolor="#161B22", bordercolor="#30363D", font_size=12),
+        xaxis=dict(gridcolor="#21262D", tickfont_size=11, zeroline=False, linecolor="#30363D"),
+        yaxis=dict(gridcolor="#21262D", tickfont_size=11, zeroline=False, linecolor="#30363D"),
+    )
+    cfg.update(kw)
+    return cfg
+
+
+# ── KPIs ──────────────────────────────────────────────────────
 def render_kpis(df: pd.DataFrame) -> None:
     if df.empty:
         st.info("Sem dados de mídia para o período selecionado.")
         return
 
-    total_impressions = df["impressions"].sum()
-    total_clicks      = df["clicks"].sum()
-    total_spend       = df["spend"].sum()
-    total_conversions = df["conversions"].sum()
-    overall_ctr  = total_clicks / total_impressions * 100 if total_impressions else 0
-    overall_cpc  = total_spend / total_clicks if total_clicks else 0
-    overall_cpa  = total_spend / total_conversions if total_conversions else 0
-    overall_reach = df["reach"].sum() if "reach" in df.columns else None
-    overall_freq  = df["frequency"].mean() if "frequency" in df.columns else None
+    imp  = df["impressions"].sum()
+    clk  = df["clicks"].sum()
+    spd  = df["spend"].sum()
+    conv = df["conversions"].sum() if "conversions" in df.columns else 0
+    rev  = df["revenue"].sum()        if ("revenue" in df.columns and df["revenue"].notna().any()) else 0
+    ga4c = df["ga4_conversions"].sum() if ("ga4_conversions" in df.columns and df["ga4_conversions"].notna().any()) else 0
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Impressões",        fmt_number(total_impressions))
-    col2.metric("Cliques",           fmt_number(total_clicks))
-    col3.metric("CTR",               fmt_pct(overall_ctr))
-    col4.metric("Investimento",      fmt_currency(total_spend))
+    ctr  = clk / imp * 100  if imp  else 0
+    cpc  = spd / clk        if clk  else 0
+    eff_conv = ga4c if ga4c > 0 else conv
+    cpa  = spd / eff_conv   if eff_conv else 0
+    roas = rev / spd        if spd and rev else 0
 
-    col5, col6, col7, col8 = st.columns(4)
-    col5.metric("CPC Médio",         fmt_currency(overall_cpc))
-    col6.metric("Conversões (Ads)",  fmt_number(total_conversions))
-    col7.metric("CPA",               fmt_currency(overall_cpa))
-    if overall_reach and overall_reach > 0:
-        col8.metric("Alcance",       fmt_number(overall_reach))
-    elif overall_freq and overall_freq > 0:
-        col8.metric("Frequência Média", f"{overall_freq:.2f}x")
+    roas_color = _GREEN if roas >= 1 else (_RED if roas > 0 else "#8B949E")
+    rev_block = (
+        f'<div style="flex:1;background:#0d2137;border:1px solid #1f4068;border-radius:12px;padding:20px 22px;">'
+        f'<p style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Receita (GA4)</p>'
+        f'<p style="font-size:34px;font-weight:900;color:{_GREEN};letter-spacing:-.03em;margin:0">{fmt_currency(rev)}</p>'
+        f'<p style="font-size:11px;color:#8B949E;margin-top:6px">Atribuída no período</p></div>'
+    ) if rev > 0 else ""
 
+    st.markdown(f"""
+    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:160px;background:linear-gradient(135deg,#0d2137,#0a1628);
+                  border:1px solid #1f4068;border-radius:12px;padding:20px 22px;">
+        <p style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">ROAS</p>
+        <p style="font-size:38px;font-weight:900;color:{roas_color};letter-spacing:-.03em;margin:0">{roas:.2f}x</p>
+        <p style="font-size:11px;color:#8B949E;margin-top:6px">Receita / Investimento</p>
+      </div>
+      <div style="flex:1;min-width:160px;background:#161B22;border:1px solid #21262D;border-radius:12px;padding:20px 22px;">
+        <p style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">CPA</p>
+        <p style="font-size:38px;font-weight:900;color:#E6EDF3;letter-spacing:-.03em;margin:0">{fmt_currency(cpa)}</p>
+        <p style="font-size:11px;color:#8B949E;margin-top:6px">Custo por conversão</p>
+      </div>
+      <div style="flex:1;min-width:160px;background:#161B22;border:1px solid #21262D;border-radius:12px;padding:20px 22px;">
+        <p style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Investimento</p>
+        <p style="font-size:38px;font-weight:900;color:#E6EDF3;letter-spacing:-.03em;margin:0">{fmt_currency(spd)}</p>
+        <p style="font-size:11px;color:#8B949E;margin-top:6px">Total no período</p>
+      </div>
+      {rev_block}
+    </div>
+    """, unsafe_allow_html=True)
 
-def render_spend_chart(df_daily: pd.DataFrame) -> None:
-    if df_daily.empty:
-        return
-    st.subheader("Investimento diário por plataforma")
-    fig = px.bar(
-        df_daily, x="date", y="spend", color="platform",
-        barmode="group",
-        labels={"spend": "Investimento (R$)", "date": "Data", "platform": "Plataforma"},
-        color_discrete_map=_COLORS,
-    )
-    fig.update_layout(**_LAYOUT)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def render_ctr_trend(df_daily: pd.DataFrame) -> None:
-    if df_daily.empty:
-        return
-    st.subheader("CTR ao longo do tempo")
-    fig = px.line(
-        df_daily, x="date", y="ctr", color="platform", markers=True,
-        labels={"ctr": "CTR (%)", "date": "Data", "platform": "Plataforma"},
-        color_discrete_map=_COLORS,
-    )
-    fig.update_traces(line=dict(width=2.5), marker=dict(size=5))
-    fig.update_layout(**_LAYOUT)
-    st.plotly_chart(fig, use_container_width=True)
+    cols = st.columns(5)
+    cols[0].metric("Impressões",  fmt_number(imp))
+    cols[1].metric("Cliques",     fmt_number(clk))
+    cols[2].metric("CTR",         fmt_pct(ctr))
+    cols[3].metric("CPC Médio",   fmt_currency(cpc))
+    cols[4].metric("Conv. GA4" if ga4c > 0 else "Conversões", fmt_number(eff_conv))
 
 
-def render_platform_comparison(df_platform: pd.DataFrame) -> None:
-    if df_platform.empty:
-        return
-    st.subheader("Comparativo entre plataformas")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        fig_spend = go.Figure(go.Pie(
-            labels=df_platform["platform"],
-            values=df_platform["spend"],
-            hole=0.5,
-            marker_colors=["#4285F4", "#1877F2"],
-            textfont_size=13,
-        ))
-        fig_spend.update_layout(
-            title=dict(text="Share de Investimento", font_color="#E8EAED"),
-            paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#E8EAED",
-            legend=dict(bgcolor="rgba(0,0,0,0)"),
-            margin=dict(t=50, b=10, l=10, r=10),
-        )
-        st.plotly_chart(fig_spend, use_container_width=True)
-
-    with col2:
-        fig_imp = go.Figure(go.Pie(
-            labels=df_platform["platform"],
-            values=df_platform["impressions"],
-            hole=0.5,
-            marker_colors=["#4285F4", "#1877F2"],
-            textfont_size=13,
-        ))
-        fig_imp.update_layout(
-            title=dict(text="Share de Impressões", font_color="#E8EAED"),
-            paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#E8EAED",
-            legend=dict(bgcolor="rgba(0,0,0,0)"),
-            margin=dict(t=50, b=10, l=10, r=10),
-        )
-        st.plotly_chart(fig_imp, use_container_width=True)
-
-
+# ── Funil completo ────────────────────────────────────────────
 def render_full_funnel(df_ads: pd.DataFrame, ga4_display: pd.DataFrame) -> None:
-    """Funil completo: Impressões → Cliques → Sessões GA4 → Conversões GA4."""
     if df_ads.empty:
         return
 
-    impressions = df_ads["impressions"].sum()
-    clicks      = df_ads["clicks"].sum()
+    imp  = df_ads["impressions"].sum()
+    clk  = df_ads["clicks"].sum()
+    sess = ga4_display["sessions"].sum()       if (not ga4_display.empty and "sessions" in ga4_display.columns) else 0
+    ga4c = ga4_display["ga4_conversions"].sum() if (not ga4_display.empty and "ga4_conversions" in ga4_display.columns) else 0
 
-    sessions  = 0.0
-    ga4_conv  = 0.0
-    if not ga4_display.empty:
-        if "sessions" in ga4_display.columns:
-            sessions = ga4_display["sessions"].sum()
-        if "ga4_conversions" in ga4_display.columns:
-            ga4_conv = ga4_display["ga4_conversions"].sum()
-
-    stages = ["Impressões", "Cliques", "Sessões (GA4)", "Conversões (GA4)"]
-    values = [impressions, clicks, sessions, ga4_conv]
-    colors = ["#58A6FF", "#A371F7", "#D29922", "#3FB950"]
-
-    # Drop stages with zero value (GA4 not configured)
-    pairs = [(s, v, c) for s, v, c in zip(stages, values, colors) if v and v > 0]
+    all_stages = [
+        ("Impressões",     imp,  "#4285F4"),
+        ("Cliques",        clk,  "#A371F7"),
+        ("Sessões (GA4)",  sess, "#D29922"),
+        ("Conversões",     ga4c, "#3FB950"),
+    ]
+    pairs = [(s, v, c) for s, v, c in all_stages if v and v > 0]
     if len(pairs) < 2:
         return
 
-    st.subheader("Funil completo — Impressão até Conversão")
+    st.markdown("**Funil completo — Impressão até Conversão**")
     fig = go.Figure(go.Funnel(
         y=[s for s, v, c in pairs],
         x=[v for s, v, c in pairs],
         textposition="inside",
         textinfo="value+percent initial",
-        marker=dict(color=[c for s, v, c in pairs]),
-        connector=dict(line=dict(color="#21262D", width=1)),
+        marker=dict(color=[c for s, v, c in pairs], line=dict(width=0)),
+        connector=dict(line=dict(color="#21262D", width=2)),
     ))
-    layout = {**_LAYOUT, "height": 320, "margin": dict(t=20, b=10, l=0, r=0)}
-    fig.update_layout(**layout)
+    fig.update_layout(**_L(height=300, margin=dict(t=10, b=10, l=0, r=0), showlegend=False))
     st.plotly_chart(fig, use_container_width=True)
 
-    # Conversion rate callouts between stages
-    if len(pairs) >= 2:
-        rate_cols = st.columns(len(pairs) - 1)
-        labels = ["CTR (Imp→Clique)", "Click → Sessão", "Taxa de Conv. (Sess→Conv)"]
-        for i, col in enumerate(rate_cols):
-            if i < len(pairs) - 1:
-                prev_v = pairs[i][1]
-                next_v = pairs[i + 1][1]
-                rate = next_v / prev_v * 100 if prev_v > 0 else 0
-                col.metric(labels[i] if i < len(labels) else f"Etapa {i+1}→{i+2}", f"{rate:.2f}%")
+    # Taxas de conversão entre etapas
+    rate_labels = ["CTR (Imp→Clique)", "Click→Sessão", "Sessão→Conversão", "Clique→Conversão"]
+    comparisons = [(pairs[i][1], pairs[i+1][1]) for i in range(len(pairs)-1)]
+    if len(pairs) == 4:
+        comparisons.append((pairs[1][1], pairs[3][1]))
+
+    cols = st.columns(len(comparisons))
+    for col, (prev_v, next_v), lbl in zip(cols, comparisons, rate_labels):
+        rate = next_v / prev_v * 100 if prev_v > 0 else 0
+        col.metric(lbl, f"{rate:.2f}%")
 
 
+# ── Canal: investimento + ROAS ────────────────────────────────
+def render_channel_performance(df_daily: pd.DataFrame, df_platform: pd.DataFrame) -> None:
+    if df_daily.empty:
+        return
+
+    col1, col2 = st.columns([3, 2])
+
+    with col1:
+        st.markdown("**Investimento diário por canal**")
+        fig = px.area(
+            df_daily, x="date", y="spend", color="platform",
+            color_discrete_map=_COLORS,
+            labels={"spend": "R$", "date": "", "platform": ""},
+        )
+        fig.update_traces(line_width=1.5)
+        fig.update_layout(**_L(height=260))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        if df_platform.empty:
+            return
+        st.markdown("**ROAS e CPA por canal**")
+
+        # Agrupa métricas dos canais verticalmente
+        ch_data = df_platform.to_dict("records")
+        for ch in ch_data:
+            color = _COLORS.get(ch.get("platform", ""), "#58A6FF")
+            roas_v = ch.get("roas", 0)
+            cpa_v  = ch.get("cpa", 0)
+            st.markdown(f"""
+            <div style="background:#161B22;border:1px solid #21262D;border-radius:10px;
+                        padding:14px 18px;margin-bottom:10px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <div style="width:9px;height:9px;border-radius:50%;background:{color}"></div>
+                <span style="font-size:13px;font-weight:700;color:#E6EDF3">{ch.get('platform','')}</span>
+              </div>
+              <div style="display:flex;gap:20px;">
+                <div>
+                  <p style="font-size:10px;color:#8B949E;text-transform:uppercase;letter-spacing:.06em">ROAS</p>
+                  <p style="font-size:22px;font-weight:800;color:{'#3FB950' if roas_v>=1 else '#F85149'}">{roas_v:.2f}x</p>
+                </div>
+                <div>
+                  <p style="font-size:10px;color:#8B949E;text-transform:uppercase;letter-spacing:.06em">CPA</p>
+                  <p style="font-size:22px;font-weight:800;color:#E6EDF3">{fmt_currency(cpa_v)}</p>
+                </div>
+                <div>
+                  <p style="font-size:10px;color:#8B949E;text-transform:uppercase;letter-spacing:.06em">Invest.</p>
+                  <p style="font-size:22px;font-weight:800;color:#E6EDF3">{fmt_currency(ch.get('spend',0))}</p>
+                </div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
+# ── Semana vs semana anterior ─────────────────────────────────
 def render_week_over_week(df: pd.DataFrame) -> None:
-    """Comparativo: semana atual vs semana anterior."""
     curr, prev = get_week_comparison(df)
     if curr.empty or prev.empty:
         st.info("Dados insuficientes para comparar semanas (mínimo 14 dias de histórico).")
@@ -174,75 +191,98 @@ def render_week_over_week(df: pd.DataFrame) -> None:
     c = agg_totals(curr)
     p = agg_totals(prev)
 
-    st.subheader("Semana atual vs Semana anterior")
+    st.markdown("**Semana atual vs Semana anterior**")
 
-    # KPI delta row
-    metrics = [
-        ("Impressões",   "impressions", fmt_number,   "normal"),
-        ("Cliques",      "clicks",      fmt_number,   "normal"),
-        ("CTR",          "ctr",         fmt_pct,      "normal"),
-        ("Investimento", "spend",       fmt_currency, "normal"),
-        ("Conversões",   "conversions", fmt_number,   "normal"),
-        ("CPA",          "cpa",         fmt_currency, "inverse"),  # menor = melhor
-        ("ROAS",         "roas",        lambda v: f"{v:.2f}x", "normal"),
+    metrics_def = [
+        ("Impressões",   "impressions", fmt_number,              "normal"),
+        ("Cliques",      "clicks",      fmt_number,              "normal"),
+        ("CTR",          "ctr",         fmt_pct,                 "normal"),
+        ("Investimento", "spend",       fmt_currency,            "normal"),
+        ("Conversões",   "conversions", fmt_number,              "normal"),
+        ("CPA",          "cpa",         fmt_currency,            "inverse"),
+        ("ROAS",         "roas",        lambda v: f"{v:.2f}x",   "normal"),
     ]
 
-    cols = st.columns(len(metrics))
-    for col, (label, key, fmt, dc) in zip(cols, metrics):
+    cols = st.columns(len(metrics_def))
+    for col, (label, key, fmt_fn, dc) in zip(cols, metrics_def):
         cv, pv = c[key], p[key]
         d_pct = (cv - pv) / pv * 100 if pv else 0
         d_str = f"{'+' if d_pct > 0 else ''}{d_pct:.1f}%"
-        col.metric(label, fmt(cv), delta=f"{d_str} vs sem. ant.", delta_color=dc)
+        col.metric(label, fmt_fn(cv), delta=f"{d_str} vs sem. ant.", delta_color=dc)
 
-    # Bar chart comparison
-    bar_data = [
-        {"Métrica": "Impressões",  "Semana atual": c["impressions"] / 1000, "Semana ant.": p["impressions"] / 1000},
-        {"Métrica": "Cliques",     "Semana atual": c["clicks"]      / 1000, "Semana ant.": p["clicks"]      / 1000},
-        {"Métrica": "Sessões GA4", "Semana atual": c["sessions"]    / 1000, "Semana ant.": p["sessions"]    / 1000},
-        {"Métrica": "Conversões",  "Semana atual": c["conversions"],        "Semana ant.": p["conversions"]       },
-    ]
-    df_bar = pd.DataFrame(bar_data)
-    fig = px.bar(
-        df_bar.melt(id_vars="Métrica", var_name="Período", value_name="Valor"),
-        x="Métrica", y="Valor", color="Período", barmode="group",
-        color_discrete_map={"Semana atual": "#58A6FF", "Semana ant.": "#30363D"},
-        labels={"Valor": "Volume (K onde aplicável)", "Métrica": ""},
-    )
-    fig.update_layout(**_LAYOUT, height=280)
+    # Variação % como waterfall — mesma escala para todas as métricas
+    changes = []
+    for label, key, _, inverse in metrics_def:
+        pv = p[key]
+        if not pv:
+            continue
+        pct = (c[key] - pv) / pv * 100
+        better = (pct < 0) if inverse else (pct > 0)
+        changes.append({"Métrica": label, "Var %": pct, "cor": _GREEN if better else _RED})
+
+    df_chg = pd.DataFrame(changes)
+    fig = go.Figure(go.Bar(
+        x=df_chg["Métrica"],
+        y=df_chg["Var %"],
+        marker_color=df_chg["cor"].tolist(),
+        text=df_chg["Var %"].apply(lambda v: f"{v:+.1f}%"),
+        textposition="outside",
+    ))
+    fig.add_hline(y=0, line_color="#30363D", line_width=1)
+    fig.update_layout(**_L(
+        height=240,
+        showlegend=False,
+        yaxis_title="Variação % WoW",
+        margin=dict(t=10, b=20, l=0, r=8),
+    ))
     st.plotly_chart(fig, use_container_width=True)
 
 
+# ── Tabela de campanhas ───────────────────────────────────────
 def render_campaign_table(df: pd.DataFrame) -> None:
     if df.empty:
         return
-    st.subheader("Performance por campanha")
 
     agg = (
         df.groupby(["platform", "campaign_name"], as_index=False)
-        .agg(
-            impressions=("impressions", "sum"),
-            clicks=("clicks", "sum"),
-            spend=("spend", "sum"),
-            conversions=("conversions", "sum"),
-        )
+        .agg(impressions=("impressions","sum"), clicks=("clicks","sum"),
+             spend=("spend","sum"), conversions=("conversions","sum"))
     )
-    agg["ctr"] = (agg["clicks"] / agg["impressions"].replace(0, 1) * 100).round(2)
-    agg["cpc"] = (agg["spend"] / agg["clicks"].replace(0, 1)).round(2)
-    agg["cpa"] = (agg["spend"] / agg["conversions"].replace(0, 1)).round(2)
+
+    has_ga4 = ("ga4_conversions" in df.columns and df["ga4_conversions"].notna().any()
+                and "revenue" in df.columns and df["revenue"].notna().any())
+    if has_ga4:
+        agg2 = df.groupby(["platform","campaign_name"], as_index=False).agg(
+            ga4_conv=("ga4_conversions","sum"), revenue=("revenue","sum"))
+        agg = agg.merge(agg2, on=["platform","campaign_name"], how="left")
+        agg["roas"] = (agg["revenue"] / agg["spend"].replace(0, 1)).round(2)
+
+    agg["ctr"] = (agg["clicks"] / agg["impressions"].replace(0,1) * 100).round(2)
+    agg["cpc"] = (agg["spend"]  / agg["clicks"].replace(0,1)).round(2)
+    agg["cpa"] = (agg["spend"]  / agg["conversions"].replace(0,1)).round(2)
     agg = agg.sort_values("spend", ascending=False)
 
+    rename = {
+        "platform": "Plataforma", "campaign_name": "Campanha",
+        "impressions": "Impressões", "clicks": "Cliques",
+        "ctr": "CTR %", "spend": "Invest. R$",
+        "cpc": "CPC R$", "conversions": "Conv.", "cpa": "CPA R$",
+    }
+    col_cfg = {
+        "CTR %":     st.column_config.NumberColumn(format="%.2f%%"),
+        "Invest. R$":st.column_config.NumberColumn(format="R$ %.2f"),
+        "CPC R$":    st.column_config.NumberColumn(format="R$ %.2f"),
+        "CPA R$":    st.column_config.NumberColumn(format="R$ %.2f"),
+    }
+    if has_ga4:
+        rename.update({"ga4_conv": "Conv. GA4", "revenue": "Receita R$", "roas": "ROAS"})
+        col_cfg["Receita R$"] = st.column_config.NumberColumn(format="R$ %.2f")
+        col_cfg["ROAS"]       = st.column_config.NumberColumn(format="%.2fx")
+
+    st.markdown("**Performance por campanha**")
     st.dataframe(
-        agg.rename(columns={
-            "platform":    "Plataforma",
-            "campaign_name": "Campanha",
-            "impressions": "Impressões",
-            "clicks":      "Cliques",
-            "ctr":         "CTR (%)",
-            "spend":       "Investimento (R$)",
-            "cpc":         "CPC (R$)",
-            "conversions": "Conversões",
-            "cpa":         "CPA (R$)",
-        }),
+        agg.rename(columns=rename),
         use_container_width=True,
         hide_index=True,
+        column_config=col_cfg,
     )
