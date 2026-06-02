@@ -1,0 +1,10 @@
+streamlit>=1.35.0
+gspread>=6.1.2
+facebook-business>=19.0.3
+google-analytics-data>=0.18.9
+google-auth>=2.29.0
+google-auth-oauthlib>=1.2.0
+pandas>=2.2.2
+plotly>=5.22.0
+python-dotenv>=1.0.1
+numpy>=1.26.4
