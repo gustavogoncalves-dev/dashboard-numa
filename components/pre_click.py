@@ -148,11 +148,8 @@ def render_full_funnel(df_ads: pd.DataFrame, ga4_display: pd.DataFrame) -> None:
         marker=dict(color=[c for s, v, c in pairs]),
         connector=dict(line=dict(color="#21262D", width=1)),
     ))
-    fig.update_layout(
-        **_LAYOUT,
-        height=320,
-        margin=dict(t=20, b=10, l=0, r=0),
-    )
+    layout = {**_LAYOUT, "height": 320, "margin": dict(t=20, b=10, l=0, r=0)}
+    fig.update_layout(**layout)
     st.plotly_chart(fig, use_container_width=True)
 
     # Conversion rate callouts between stages
