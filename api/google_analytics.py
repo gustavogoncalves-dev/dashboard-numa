@@ -30,16 +30,11 @@ def _build_client() -> BetaAnalyticsDataClient:
 
     raw = json.loads(token_path.read_text())
 
-    creds = Credentials(
-        token=raw.get("token"),
-        refresh_token=raw.get("refresh_token"),
-        token_uri=raw.get("token_uri", "https://oauth2.googleapis.com/token"),
-        client_id=raw.get("client_id"),
-        client_secret=raw.get("client_secret"),
-        scopes=raw.get("scopes"),
-    )
+    # from_authorized_user_info parseia expiry corretamente — evita usar token expirado
+    creds = Credentials.from_authorized_user_info(raw)
 
-    if not creds.valid:
+    # Refresh sempre que inválido OU expirado
+    if not creds.valid or creds.expired:
         creds.refresh(Request())
         token_path.write_text(creds.to_json())
 
