@@ -98,21 +98,23 @@ def agg_totals(df: pd.DataFrame) -> dict:
     clk  = df["clicks"].sum()
     spd  = df["spend"].sum()
     conv = df["conversions"].sum()
-    sess = df["sessions"].sum() if "sessions" in df.columns else 0.0
-    rev  = df["revenue"].sum()  if "revenue"  in df.columns else 0.0
+    sess = df["sessions"].sum()        if "sessions"       in df.columns else 0.0
+    rev  = df["revenue"].sum()         if "revenue"        in df.columns else 0.0
     ga4c = df["ga4_conversions"].sum() if "ga4_conversions" in df.columns else 0.0
+    # CPA usa GA4 conversions quando disponível; fallback para ads conversions
+    eff_conv = ga4c if ga4c > 0 else conv
     return {
-        "impressions": imp,
-        "clicks":      clk,
-        "spend":       spd,
-        "conversions": conv,
-        "sessions":    sess,
-        "revenue":     rev,
+        "impressions":     imp,
+        "clicks":          clk,
+        "spend":           spd,
+        "conversions":     conv,
+        "sessions":        sess,
+        "revenue":         rev,
         "ga4_conversions": ga4c,
-        "ctr":  clk / imp  * 100 if imp  > 0 else 0.0,
-        "cpc":  spd / clk        if clk  > 0 else 0.0,
-        "cpa":  spd / conv       if conv > 0 else 0.0,
-        "roas": rev / spd        if spd  > 0 else 0.0,
+        "ctr":  clk / imp  * 100 if imp      > 0 else 0.0,
+        "cpc":  spd / clk        if clk      > 0 else 0.0,
+        "cpa":  spd / eff_conv   if eff_conv > 0 else 0.0,
+        "roas": rev / spd        if spd      > 0 else 0.0,
     }
 
 

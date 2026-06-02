@@ -75,12 +75,22 @@ def render_kpis(df: pd.DataFrame) -> None:
     </div>
     """, unsafe_allow_html=True)
 
-    cols = st.columns(5)
+    # Sessões GA4 só aparece se houver dados cruzados
+    has_sessions = ("sessions" in df.columns and df["sessions"].notna().any() and df["sessions"].sum() > 0)
+    sess_total   = df["sessions"].sum() if has_sessions else 0
+
+    n_cols = 6 if has_sessions else 5
+    cols = st.columns(n_cols)
     cols[0].metric("Impressões",  fmt_number(imp))
     cols[1].metric("Cliques",     fmt_number(clk))
     cols[2].metric("CTR",         fmt_pct(ctr))
-    cols[3].metric("CPC Médio",   fmt_currency(cpc))
-    cols[4].metric("Conv. GA4" if ga4c > 0 else "Conversões", fmt_number(eff_conv))
+    if has_sessions:
+        cols[3].metric("Sessões GA4", fmt_number(sess_total))
+        cols[4].metric("Conv. GA4",   fmt_number(ga4c))
+        cols[5].metric("CPC Médio",   fmt_currency(cpc))
+    else:
+        cols[3].metric("CPC Médio",   fmt_currency(cpc))
+        cols[4].metric("Conversões",  fmt_number(eff_conv))
 
 
 # ── Funil completo ────────────────────────────────────────────
@@ -243,43 +253,78 @@ def render_campaign_table(df: pd.DataFrame) -> None:
     if df.empty:
         return
 
-    agg = (
-        df.groupby(["platform", "campaign_name"], as_index=False)
-        .agg(impressions=("impressions","sum"), clicks=("clicks","sum"),
-             spend=("spend","sum"), conversions=("conversions","sum"))
-    )
+    # Detecta quais colunas GA4 estão disponíveis
+    has_sessions = ("sessions" in df.columns and df["sessions"].notna().any() and df["sessions"].sum() > 0)
+    has_ga4_conv = ("ga4_conversions" in df.columns and df["ga4_conversions"].notna().any())
+    has_revenue  = ("revenue" in df.columns and df["revenue"].notna().any() and df["revenue"].sum() > 0)
 
-    has_ga4 = ("ga4_conversions" in df.columns and df["ga4_conversions"].notna().any()
-                and "revenue" in df.columns and df["revenue"].notna().any())
-    if has_ga4:
-        agg2 = df.groupby(["platform","campaign_name"], as_index=False).agg(
-            ga4_conv=("ga4_conversions","sum"), revenue=("revenue","sum"))
-        agg = agg.merge(agg2, on=["platform","campaign_name"], how="left")
+    agg_dict = dict(
+        impressions=("impressions", "sum"),
+        clicks=("clicks", "sum"),
+        spend=("spend", "sum"),
+    )
+    if has_sessions:
+        agg_dict["sessions"] = ("sessions", "sum")
+    if has_ga4_conv:
+        agg_dict["ga4_conversions"] = ("ga4_conversions", "sum")
+    if has_revenue:
+        agg_dict["revenue"] = ("revenue", "sum")
+
+    agg = df.groupby(["platform", "campaign_name"], as_index=False).agg(**agg_dict)
+
+    # CPA: sempre baseado em GA4 conversions (evento real no site); fallback ads conv
+    if has_ga4_conv:
+        agg["cpa"] = (agg["spend"] / agg["ga4_conversions"].replace(0, pd.NA)).round(2)
+    else:
+        ads_conv = df.groupby(["platform","campaign_name"])["conversions"].sum().reset_index()
+        agg = agg.merge(ads_conv, on=["platform","campaign_name"], how="left")
+        agg["cpa"] = (agg["spend"] / agg["conversions"].replace(0, pd.NA)).round(2)
+
+    if has_revenue:
         agg["roas"] = (agg["revenue"] / agg["spend"].replace(0, 1)).round(2)
 
-    agg["ctr"] = (agg["clicks"] / agg["impressions"].replace(0,1) * 100).round(2)
-    agg["cpc"] = (agg["spend"]  / agg["clicks"].replace(0,1)).round(2)
-    agg["cpa"] = (agg["spend"]  / agg["conversions"].replace(0,1)).round(2)
+    agg["ctr"] = (agg["clicks"] / agg["impressions"].replace(0, 1) * 100).round(2)
     agg = agg.sort_values("spend", ascending=False)
 
-    rename = {
-        "platform": "Plataforma", "campaign_name": "Campanha",
-        "impressions": "Impressões", "clicks": "Cliques",
-        "ctr": "CTR %", "spend": "Invest. R$",
-        "cpc": "CPC R$", "conversions": "Conv.", "cpa": "CPA R$",
-    }
-    col_cfg = {
-        "CTR %":     st.column_config.NumberColumn(format="%.2f%%"),
-        "Invest. R$":st.column_config.NumberColumn(format="R$ %.2f"),
-        "CPC R$":    st.column_config.NumberColumn(format="R$ %.2f"),
-        "CPA R$":    st.column_config.NumberColumn(format="R$ %.2f"),
-    }
-    if has_ga4:
-        rename.update({"ga4_conv": "Conv. GA4", "revenue": "Receita R$", "roas": "ROAS"})
-        col_cfg["Receita R$"] = st.column_config.NumberColumn(format="R$ %.2f")
-        col_cfg["ROAS"]       = st.column_config.NumberColumn(format="%.2fx")
+    # Monta rename e column_config na ordem desejada
+    cols_order = ["platform", "campaign_name", "spend"]
+    if has_sessions:
+        cols_order.append("sessions")
+    if has_ga4_conv:
+        cols_order.append("ga4_conversions")
+    cols_order += ["cpa"]
+    if has_revenue:
+        cols_order += ["revenue", "roas"]
+    cols_order += ["impressions", "clicks", "ctr"]
 
-    st.markdown("**Performance por campanha**")
+    agg = agg[[c for c in cols_order if c in agg.columns]]
+
+    rename = {
+        "platform":        "Plataforma",
+        "campaign_name":   "Campanha",
+        "spend":           "Invest. R$",
+        "sessions":        "Sessões GA4",
+        "ga4_conversions": "Conv. GA4",
+        "conversions":     "Conv. Ads",
+        "cpa":             "CPA R$",
+        "revenue":         "Receita R$",
+        "roas":            "ROAS",
+        "impressions":     "Impressões",
+        "clicks":          "Cliques",
+        "ctr":             "CTR %",
+    }
+
+    col_cfg = {
+        "Invest. R$": st.column_config.NumberColumn(format="R$ %.2f"),
+        "CPA R$":     st.column_config.NumberColumn(format="R$ %.2f"),
+        "Receita R$": st.column_config.NumberColumn(format="R$ %.2f"),
+        "ROAS":       st.column_config.NumberColumn(format="%.2fx"),
+        "CTR %":      st.column_config.NumberColumn(format="%.2f%%"),
+        "Sessões GA4":st.column_config.NumberColumn(format="%d"),
+        "Conv. GA4":  st.column_config.NumberColumn(format="%d"),
+    }
+
+    st.markdown("**Performance por campanha** — CPA calculado sobre conversões GA4")
     st.dataframe(
         agg.rename(columns=rename),
         use_container_width=True,
