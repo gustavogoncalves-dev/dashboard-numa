@@ -50,18 +50,22 @@ def render_kpis(df: pd.DataFrame) -> None:
         roas = total_revenue / total_spend
         col8.metric("ROAS Global", f"{roas:.2f}x")
     else:
-        custo_por_sessao = 0.0
-        col8.metric("Sessões / dia", f"{total_sessions / max((df_filled['date'].nunique() if 'date' in df_filled.columns else 1), 1):.1f}")
+        days = df_filled["date"].nunique() if "date" in df_filled.columns else 1
+        col8.metric("Sessões / dia", f"{total_sessions / max(days, 1):.1f}")
 
 
 def render_engagement_chart(df: pd.DataFrame) -> None:
-    if df.empty or "sessions" not in df.columns:
+    if df.empty or "sessions" not in df.columns or "campaign_name" not in df.columns:
         return
     st.subheader("Sessões e Engajamento por campanha")
+    group_cols = ["campaign_name"] + (["platform"] if "platform" in df.columns else [])
+    agg_kw = {"sessions": ("sessions", "sum")}
+    if "engagement_rate" in df.columns:
+        agg_kw["engagement_rate"] = ("engagement_rate", "mean")
     agg = (
         df.fillna(0)
-        .groupby(["campaign_name"] + (["platform"] if "platform" in df.columns else []), as_index=False)
-        .agg(sessions=("sessions", "sum"), engagement_rate=("engagement_rate", "mean"))
+        .groupby(group_cols, as_index=False)
+        .agg(**agg_kw)
     )
     agg = agg.sort_values("sessions", ascending=True).tail(15)
 
@@ -103,7 +107,7 @@ def render_funnel(df: pd.DataFrame) -> None:
 
 
 def render_revenue_table(df: pd.DataFrame) -> None:
-    if df.empty or "revenue" not in df.columns:
+    if df.empty or "revenue" not in df.columns or "campaign_name" not in df.columns:
         return
     st.subheader("Receita e métricas por campanha")
 
@@ -111,15 +115,16 @@ def render_revenue_table(df: pd.DataFrame) -> None:
     if "platform" in df.columns:
         group_cols = ["platform", "campaign_name"]
 
-    agg_dict = dict(
-        sessions=("sessions", "sum"),
-        ga4_conversions=("ga4_conversions", "sum"),
-        revenue=("revenue", "sum"),
-        avg_bounce=("bounce_rate", "mean"),
-        avg_pages=("pages_per_session", "mean"),
-    )
+    _safe_agg = {
+        "sessions":        ("sessions",        "sum"),
+        "ga4_conversions": ("ga4_conversions", "sum"),
+        "revenue":         ("revenue",         "sum"),
+        "bounce_rate":     ("bounce_rate",      "mean"),
+        "pages_per_session":("pages_per_session","mean"),
+    }
     if "spend" in df.columns:
-        agg_dict["spend"] = ("spend", "sum")
+        _safe_agg["spend"] = ("spend", "sum")
+    agg_dict = {k: v for k, v in _safe_agg.items() if v[0] in df.columns}
 
     agg = df.fillna(0).groupby(group_cols, as_index=False).agg(**agg_dict)
 

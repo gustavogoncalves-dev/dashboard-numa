@@ -83,6 +83,8 @@ def get_week_comparison(df: pd.DataFrame):
         return pd.DataFrame(), pd.DataFrame()
     df = _ensure_cols(df.copy())
     max_date = df["date"].max()
+    if pd.isnull(max_date):
+        return pd.DataFrame(), pd.DataFrame()
     curr_start = max_date - pd.Timedelta(days=6)
     prev_end   = curr_start - pd.Timedelta(days=1)
     prev_start = prev_end   - pd.Timedelta(days=6)

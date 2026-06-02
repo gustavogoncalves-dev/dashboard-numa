@@ -231,6 +231,8 @@ def render_week_over_week(df: pd.DataFrame) -> None:
         changes.append({"Métrica": label, "Var %": pct, "cor": _GREEN if better else _RED})
 
     df_chg = pd.DataFrame(changes)
+    if df_chg.empty:
+        return
     fig = go.Figure(go.Bar(
         x=df_chg["Métrica"],
         y=df_chg["Var %"],
@@ -252,38 +254,41 @@ def render_week_over_week(df: pd.DataFrame) -> None:
 def render_campaign_table(df: pd.DataFrame) -> None:
     if df.empty:
         return
+    if "platform" not in df.columns or "campaign_name" not in df.columns:
+        return
 
-    # Detecta quais colunas GA4 estão disponíveis
-    has_sessions = ("sessions" in df.columns and df["sessions"].notna().any() and df["sessions"].sum() > 0)
-    has_ga4_conv = ("ga4_conversions" in df.columns and df["ga4_conversions"].notna().any())
-    has_revenue  = ("revenue" in df.columns and df["revenue"].notna().any() and df["revenue"].sum() > 0)
+    df = df.copy()
+    for _c in ["impressions", "clicks", "spend", "conversions"]:
+        if _c not in df.columns:
+            df[_c] = 0.0
 
-    agg_dict = dict(
+    has_sessions = "sessions"        in df.columns and df["sessions"].gt(0).any()
+    has_ga4_conv = "ga4_conversions" in df.columns and df["ga4_conversions"].notna().any()
+    has_revenue  = "revenue"         in df.columns and df["revenue"].gt(0).any()
+
+    agg_dict: dict = dict(
         impressions=("impressions", "sum"),
         clicks=("clicks", "sum"),
         spend=("spend", "sum"),
+        conversions=("conversions", "sum"),
     )
-    if has_sessions:
-        agg_dict["sessions"] = ("sessions", "sum")
-    if has_ga4_conv:
-        agg_dict["ga4_conversions"] = ("ga4_conversions", "sum")
-    if has_revenue:
-        agg_dict["revenue"] = ("revenue", "sum")
+    if has_sessions:  agg_dict["sessions"]        = ("sessions",        "sum")
+    if has_ga4_conv:  agg_dict["ga4_conversions"] = ("ga4_conversions", "sum")
+    if has_revenue:   agg_dict["revenue"]          = ("revenue",         "sum")
 
     agg = df.groupby(["platform", "campaign_name"], as_index=False).agg(**agg_dict)
 
-    # CPA: sempre baseado em GA4 conversions (evento real no site); fallback ads conv
+    # CPA — .where() substitui zeros por NaN; divisão por NaN retorna NaN (seguro)
     if has_ga4_conv:
-        agg["cpa"] = (agg["spend"] / agg["ga4_conversions"].replace(0, pd.NA)).round(2)
+        safe_conv = agg["ga4_conversions"].where(agg["ga4_conversions"] > 0)
     else:
-        ads_conv = df.groupby(["platform","campaign_name"])["conversions"].sum().reset_index()
-        agg = agg.merge(ads_conv, on=["platform","campaign_name"], how="left")
-        agg["cpa"] = (agg["spend"] / agg["conversions"].replace(0, pd.NA)).round(2)
+        safe_conv = agg["conversions"].where(agg["conversions"] > 0)
+    agg["cpa"] = (agg["spend"] / safe_conv).round(2)
 
     if has_revenue:
-        agg["roas"] = (agg["revenue"] / agg["spend"].replace(0, 1)).round(2)
+        agg["roas"] = (agg["revenue"] / agg["spend"].where(agg["spend"] > 0)).round(2)
 
-    agg["ctr"] = (agg["clicks"] / agg["impressions"].replace(0, 1) * 100).round(2)
+    agg["ctr"] = (agg["clicks"] / agg["impressions"].where(agg["impressions"] > 0) * 100).round(2)
     agg = agg.sort_values("spend", ascending=False)
 
     # Monta rename e column_config na ordem desejada

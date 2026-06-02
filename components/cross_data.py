@@ -21,7 +21,8 @@ _LAYOUT = _L()  # backwards compat
 
 
 def render_efficiency_scatter(df: pd.DataFrame) -> None:
-    if df.empty or "sessions" not in df.columns:
+    needed = {"sessions", "spend", "platform", "campaign_name", "conversions", "revenue"}
+    if df.empty or not needed.issubset(df.columns):
         return
     st.subheader("Eficiência: Investimento vs. Sessões por campanha")
 
@@ -54,7 +55,8 @@ def render_efficiency_scatter(df: pd.DataFrame) -> None:
 
 
 def render_ctr_vs_engagement(df: pd.DataFrame) -> None:
-    if df.empty or "engagement_rate" not in df.columns:
+    needed = {"ctr", "engagement_rate", "spend", "platform", "campaign_name"}
+    if df.empty or not needed.issubset(df.columns):
         return
     st.subheader("CTR (pré-clique) vs. Taxa de Engajamento (pós-clique)")
 
@@ -88,7 +90,8 @@ def render_ctr_vs_engagement(df: pd.DataFrame) -> None:
 
 
 def render_cost_per_session(df: pd.DataFrame) -> None:
-    if df.empty or "sessions" not in df.columns:
+    needed = {"sessions", "spend", "platform", "campaign_name"}
+    if df.empty or not needed.issubset(df.columns):
         return
     st.subheader("Custo por Sessão (GA4) por campanha")
 
