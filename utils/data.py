@@ -77,6 +77,45 @@ def aggregate_by_date(df: pd.DataFrame) -> pd.DataFrame:
     return agg
 
 
+def get_week_comparison(df: pd.DataFrame):
+    """Returns (curr_week_df, prev_week_df) — last 7 days vs 7 days before that."""
+    if df.empty or "date" not in df.columns:
+        return pd.DataFrame(), pd.DataFrame()
+    df = _ensure_cols(df.copy())
+    max_date = df["date"].max()
+    curr_start = max_date - pd.Timedelta(days=6)
+    prev_end   = curr_start - pd.Timedelta(days=1)
+    prev_start = prev_end   - pd.Timedelta(days=6)
+    curr = df[df["date"] >= curr_start].copy()
+    prev = df[(df["date"] >= prev_start) & (df["date"] <= prev_end)].copy()
+    return curr, prev
+
+
+def agg_totals(df: pd.DataFrame) -> dict:
+    """Aggregate a DataFrame into a flat dict of total KPIs."""
+    df = _ensure_cols(df.copy())
+    imp  = df["impressions"].sum()
+    clk  = df["clicks"].sum()
+    spd  = df["spend"].sum()
+    conv = df["conversions"].sum()
+    sess = df["sessions"].sum() if "sessions" in df.columns else 0.0
+    rev  = df["revenue"].sum()  if "revenue"  in df.columns else 0.0
+    ga4c = df["ga4_conversions"].sum() if "ga4_conversions" in df.columns else 0.0
+    return {
+        "impressions": imp,
+        "clicks":      clk,
+        "spend":       spd,
+        "conversions": conv,
+        "sessions":    sess,
+        "revenue":     rev,
+        "ga4_conversions": ga4c,
+        "ctr":  clk / imp  * 100 if imp  > 0 else 0.0,
+        "cpc":  spd / clk        if clk  > 0 else 0.0,
+        "cpa":  spd / conv       if conv > 0 else 0.0,
+        "roas": rev / spd        if spd  > 0 else 0.0,
+    }
+
+
 def fmt_currency(value: float) -> str:
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
