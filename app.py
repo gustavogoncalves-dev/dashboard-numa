@@ -13,6 +13,7 @@ from utils.data import merge_ads_with_ga4, aggregate_by_platform, aggregate_by_d
 import components.pre_click as pre_click
 import components.post_click as post_click
 import components.cross_data as cross_data
+import components.executive as executive
 
 st.set_page_config(
     page_title="Media Dashboard",
@@ -228,11 +229,18 @@ else:
 
 
 # ── Tabs ──────────────────────────────────────────────────────
-tab_pre, tab_post, tab_cross = st.tabs(["📈  Pré-clique", "🎯  Pós-clique (GA4)", "🔀  Cruzamento"])
+tab_exec, tab_detail, tab_week = st.tabs([
+    "📊  Executivo",
+    "🔍  Detalhe por campanha",
+    "📅  Semana vs Semana",
+])
 
-with tab_pre:
+with tab_exec:
+    executive.render(df_merged, _ga4_display, df_daily, df_platform)
+
+with tab_detail:
     if df_merged.empty:
-        st.info("Sem dados de mídia paga para o período. Verifique se a planilha Google Sheets está configurada e possui dados no período selecionado.")
+        st.info("Sem dados de mídia paga para o período.")
     else:
         pre_click.render_kpis(df_merged)
         st.divider()
@@ -240,44 +248,27 @@ with tab_pre:
         st.divider()
         pre_click.render_channel_performance(df_daily, df_platform)
         st.divider()
-        pre_click.render_week_over_week(df_merged)
-        st.divider()
         pre_click.render_campaign_table(df_merged)
+        if not _ga4_display.empty:
+            st.divider()
+            post_click.render_kpis(_ga4_display)
+            col1, col2 = st.columns(2)
+            with col1:
+                post_click.render_funnel(_ga4_display)
+            with col2:
+                post_click.render_engagement_chart(_ga4_display)
+            post_click.render_revenue_table(_ga4_display)
+        if has_merged_ga4:
+            st.divider()
+            cross_data.render_ctr_vs_engagement(df_merged)
+            cross_data.render_efficiency_scatter(df_merged)
+            cross_data.render_cost_per_session(df_merged)
 
-with tab_post:
-    if _ga4_display.empty:
-        st.info("Sem dados do GA4. Verifique se o GA4 Property ID está correto e se há dados no período selecionado.")
+with tab_week:
+    if df_merged.empty:
+        st.info("Sem dados para o comparativo semanal.")
     else:
-        post_click.render_kpis(_ga4_display)
-        st.divider()
-        col1, col2 = st.columns(2)
-        with col1:
-            post_click.render_funnel(_ga4_display)
-        with col2:
-            post_click.render_engagement_chart(_ga4_display)
-        post_click.render_revenue_table(_ga4_display)
-
-with tab_cross:
-    if not has_merged_ga4:
-        st.info(
-            "O cruzamento requer dados de **mídia paga + GA4** com nomes de campanha correspondentes. "
-            "Certifique-se de que os UTMs das campanhas usam o mesmo nome que aparece no Google Ads / Meta Ads."
-        )
-        if not df_ga4.empty and not df_merged.empty:
-            with st.expander("Ver campanhas disponíveis nas duas fontes"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.caption("Campanhas (Ads)")
-                    st.dataframe(df_merged[["platform", "campaign_name"]].drop_duplicates(), hide_index=True)
-                with col2:
-                    st.caption("Campanhas (GA4)")
-                    st.dataframe(df_ga4[["campaign_name"]].drop_duplicates(), hide_index=True)
-    else:
-        cross_data.render_ctr_vs_engagement(df_merged)
-        st.divider()
-        cross_data.render_efficiency_scatter(df_merged)
-        st.divider()
-        cross_data.render_cost_per_session(df_merged)
+        pre_click.render_week_over_week(df_merged)
 
 # ── Footer ────────────────────────────────────────────────────
 st.divider()
