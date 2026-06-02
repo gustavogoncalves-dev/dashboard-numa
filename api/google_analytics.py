@@ -1,5 +1,6 @@
 import os
 import json
+import tempfile
 import pandas as pd
 from pathlib import Path
 from datetime import date
@@ -17,7 +18,17 @@ TOKEN_FILE = Path(__file__).parent.parent / ".google_token.json"
 
 
 def _build_client() -> BetaAnalyticsDataClient:
-    raw = json.loads(TOKEN_FILE.read_text())
+    if TOKEN_FILE.exists():
+        token_path = TOKEN_FILE
+    else:
+        token_json = os.environ.get("GOOGLE_TOKEN_JSON", "")
+        if not token_json:
+            raise RuntimeError("GOOGLE_TOKEN_JSON não configurado e .google_token.json não encontrado")
+        tmp = Path(tempfile.mktemp(suffix=".json"))
+        tmp.write_text(token_json)
+        token_path = tmp
+
+    raw = json.loads(token_path.read_text())
 
     creds = Credentials(
         token=raw.get("token"),
@@ -30,8 +41,7 @@ def _build_client() -> BetaAnalyticsDataClient:
 
     if not creds.valid:
         creds.refresh(Request())
-        raw_updated = json.loads(creds.to_json())
-        TOKEN_FILE.write_text(json.dumps(raw_updated))
+        token_path.write_text(creds.to_json())
 
     return BetaAnalyticsDataClient(credentials=creds)
 

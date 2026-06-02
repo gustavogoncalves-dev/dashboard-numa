@@ -1,4 +1,6 @@
 import os
+import json
+import tempfile
 import pandas as pd
 from datetime import date
 from pathlib import Path
@@ -29,18 +31,27 @@ _COL_MAP = {
 
 
 def _get_credentials() -> Credentials:
+    token_json = os.environ.get("GOOGLE_TOKEN_JSON", "")
+    if not _TOKEN_FILE.exists() and token_json:
+        tmp = Path(tempfile.mktemp(suffix=".json"))
+        tmp.write_text(token_json)
+        token_path = tmp
+    else:
+        token_path = _TOKEN_FILE
+
     creds = None
-    if _TOKEN_FILE.exists():
-        creds = Credentials.from_authorized_user_file(str(_TOKEN_FILE), _SCOPES)
+    if token_path.exists():
+        creds = Credentials.from_authorized_user_file(str(token_path), _SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+            token_path.write_text(creds.to_json())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(_CLIENT_SECRETS_FILE), _SCOPES
             )
             creds = flow.run_local_server(port=0)
-        _TOKEN_FILE.write_text(creds.to_json())
+            token_path.write_text(creds.to_json())
     return creds
 
 
