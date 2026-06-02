@@ -253,7 +253,7 @@ def _render_efficiency_trend(df_daily: pd.DataFrame) -> None:
         fig.add_trace(go.Bar(
             x=daily["date"], y=daily["spend"],
             name="Investimento",
-            marker_color=_ACCENT + "AA",
+            marker_color="rgba(88,166,255,0.67)",
         ))
         yaxis_title = "Investimento (R$)"
 
