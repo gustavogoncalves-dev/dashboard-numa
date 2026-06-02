@@ -278,30 +278,31 @@ def _render_channel_revenue(df_platform: pd.DataFrame) -> None:
 
     df_sorted = df_platform.sort_values(metric, ascending=True)
 
+    # Texto da barra: valor + ROAS numa única string (sem anotações separadas)
+    if has_rev and "roas" in df_platform.columns:
+        bar_text = df_sorted.apply(
+            lambda r: f"{fmt_currency(r[metric])}  ·  ROAS {r['roas']:.2f}x", axis=1
+        ).tolist()
+    else:
+        bar_text = df_sorted[metric].apply(fmt_currency).tolist()
+
     fig = go.Figure(go.Bar(
         x=df_sorted[metric],
         y=df_sorted["platform"],
         orientation="h",
         marker_color=[_COLORS.get(p, _ACCENT) for p in df_sorted["platform"]],
-        text=df_sorted[metric].apply(fmt_currency),
-        textposition="outside",
+        text=bar_text,
+        textposition="inside",
+        insidetextanchor="middle",
+        textfont=dict(size=13, color="#FFFFFF"),
     ))
 
-    if has_rev and "roas" in df_platform.columns:
-        for _, row in df_sorted.iterrows():
-            fig.add_annotation(
-                x=row[metric], y=row["platform"],
-                text=f"ROAS {row['roas']:.2f}x",
-                xanchor="left", xshift=5,
-                showarrow=False,
-                font=dict(size=10, color=_GREEN if row["roas"] >= 1.5 else _MUTED),
-            )
-
     fig.update_layout(**_L(
-        height=240,
+        height=200,
         showlegend=False,
         xaxis_title=label,
-        margin=dict(t=8, b=16, l=0, r=80),
+        xaxis=dict(visible=False),
+        margin=dict(t=8, b=8, l=0, r=8),
     ))
     st.markdown(f"**{'Receita' if has_rev else 'Investimento'} por canal**")
     st.plotly_chart(fig, use_container_width=True)

@@ -43,6 +43,27 @@ def _ga4_agg(ga4_df: pd.DataFrame, group_cols: list) -> pd.DataFrame:
     return ga4_df.groupby(group_cols, as_index=False).agg(**agg_kw)
 
 
+_PAID_MEDIUMS = {"cpc", "cpm", "paid", "ppc", "paidsocial", "paid_social",
+                  "paid-social", "paid_cpc", "cpv", "display"}
+
+
+def _filter_paid(ga4_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filtra GA4 para apenas sessões de mídia paga (medium=cpc/paid/etc).
+    Garante que ROAS e Receita reflitam apenas tráfego originado por Ads.
+    """
+    if "medium" not in ga4_df.columns:
+        return ga4_df
+    paid = ga4_df[ga4_df["medium"].str.lower().str.strip().isin(_PAID_MEDIUMS)].copy()
+    if paid.empty:
+        # Fallback: remove tráfego "(not set)" e orgânico óbvio
+        paid = ga4_df[
+            (ga4_df["campaign_name"] != "(not set)") &
+            (~ga4_df["medium"].str.lower().isin({"organic", "(none)", "referral", "email", "direct"}))
+        ].copy()
+    return paid if not paid.empty else ga4_df
+
+
 def merge_ads_with_ga4(ads_df: pd.DataFrame, ga4_df: pd.DataFrame) -> pd.DataFrame:
     """
     Tenta casar dados de Ads com GA4 em 3 passes progressivos:
@@ -53,6 +74,9 @@ def merge_ads_with_ga4(ads_df: pd.DataFrame, ga4_df: pd.DataFrame) -> pd.DataFra
     """
     if ads_df.empty or ga4_df.empty:
         return ads_df
+
+    # Filtra apenas tráfego de mídia paga antes de qualquer merge
+    ga4_df = _filter_paid(ga4_df)
 
     # ── Pass 1: exact ─────────────────────────────────────────
     ga4_exact = _ga4_agg(ga4_df, ["date", "campaign_name"])
