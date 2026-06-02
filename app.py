@@ -98,6 +98,30 @@ with st.sidebar:
                 st.markdown(f'<span class="badge-err">✗ {src} — erro</span>', unsafe_allow_html=True)
             st.write("")
 
+    # Diagnóstico de casamento Ads ↔ GA4
+    if "df_merged" in st.session_state:
+        _dm = st.session_state["df_merged"]
+        if not _dm.empty and "_merge_method" in _dm.columns:
+            _method = _dm["_merge_method"].iloc[0]
+            _labels = {
+                "exact":            ("badge-ok",   "GA4 ↔ Ads: nome exato"),
+                "normalized":       ("badge-warn", "GA4 ↔ Ads: nome normalizado"),
+                "date_proportional":("badge-warn", "GA4 ↔ Ads: distribuição por data"),
+                "none":             ("badge-err",  "GA4 ↔ Ads: sem match"),
+            }
+            _cls, _txt = _labels.get(_method, ("badge-err", f"GA4 ↔ Ads: {_method}"))
+            st.divider()
+            st.markdown(f'<span class="{_cls}">{_txt}</span>', unsafe_allow_html=True)
+            if _method in ("date_proportional", "none"):
+                with st.expander("Ver campanhas (Ads vs GA4)", expanded=False):
+                    _dga4 = st.session_state.get("df_ga4", pd.DataFrame())
+                    if not _dga4.empty and "campaign_name" in _dga4.columns:
+                        st.caption("Nomes no GA4 (`sessionCampaignName`)")
+                        st.dataframe(_dga4[["campaign_name"]].drop_duplicates().sort_values("campaign_name"), hide_index=True)
+                    if "campaign_name" in _dm.columns:
+                        st.caption("Nomes nos Ads")
+                        st.dataframe(_dm[["platform","campaign_name"]].drop_duplicates().sort_values("campaign_name"), hide_index=True)
+
 
 # ── Data loading ─────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
