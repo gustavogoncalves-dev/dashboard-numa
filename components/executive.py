@@ -311,91 +311,6 @@ def _render_channel_revenue(df_platform: pd.DataFrame) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
 
-# ── 6. Decisões (The Ask) ─────────────────────────────────────
-def _render_the_ask(m: dict, df_platform: pd.DataFrame) -> None:
-    decisions = []
-
-    # Decisão 1: escalar ou cortar com base no ROAS
-    if m["roas"] >= 3:
-        potential = m["rev"] * 0.25
-        decisions.append({
-            "icon": "🚀", "color": _GREEN,
-            "title": "Escalar investimento",
-            "body":  f"ROAS de {m['roas']:.2f}x confirma eficiência comprovada. Aumentar budget em +25% pode gerar "
-                     f"~{fmt_currency(potential)} de receita incremental sem alterar o CAC.",
-            "ask":   f"Aprovar aumento de {fmt_currency(m['spd']*0.25)} em verba paga",
-        })
-    elif m["roas"] >= 1.5:
-        decisions.append({
-            "icon": "📈", "color": _ACCENT,
-            "title": "Otimizar antes de escalar",
-            "body":  f"ROAS {m['roas']:.2f}x é positivo mas ainda tem espaço. Reduzir CPA de {fmt_currency(m['cpa'])} "
-                     f"em 15% antes de escalar pode elevar ROAS para {m['roas']*1.15:.2f}x.",
-            "ask":   "Revisar lances e audiências antes do próximo ciclo de budget",
-        })
-    elif m["roas"] > 0 and m["roas"] < 1:
-        decisions.append({
-            "icon": "🛑", "color": _RED,
-            "title": "Revisar mix urgente",
-            "body":  f"ROAS de {m['roas']:.2f}x significa prejuízo a cada real investido. Congelar campanhas com CPA "
-                     f"acima de {fmt_currency(m['cpa']*1.3)} e redirecionar para canais rentáveis.",
-            "ask":   f"Cortar {fmt_currency(m['spd']*0.3)} das campanhas menos eficientes imediatamente",
-        })
-
-    # Decisão 2: realocar entre canais
-    if not df_platform.empty and "roas" in df_platform.columns and len(df_platform) >= 2:
-        df_sorted = df_platform.sort_values("roas", ascending=False)
-        best  = df_sorted.iloc[0]
-        worst = df_sorted.iloc[-1]
-        if best["roas"] > 0 and worst["roas"] >= 0 and best["roas"] > worst["roas"] * 1.3:
-            move = worst["spend"] * 0.3
-            est  = move * best["roas"]
-            decisions.append({
-                "icon": "🔀", "color": _YELLOW,
-                "title": f"Realocar de {worst['platform']} → {best['platform']}",
-                "body":  f"{best['platform']} entrega ROAS {best['roas']:.2f}x vs {worst['roas']:.2f}x do {worst['platform']}. "
-                         f"Mover {fmt_currency(move)} pode gerar ~{fmt_currency(est)} adicionais.",
-                "ask":   f"Realocar {fmt_currency(move)} para {best['platform']} no próximo ciclo",
-            })
-
-    # Decisão 3: gargalo do funil
-    stages = [("CTR", m["ctr"], 2.0), ("Click→Sessão", m["c2s"], 60.0), ("Conv. Rate", m["cvr"], 2.0)]
-    bottlenecks = [(lbl, val, ref) for lbl, val, ref in stages if val > 0 and val < ref * 0.5]
-    if bottlenecks:
-        lbl, val, ref = bottlenecks[0]
-        decisions.append({
-            "icon": "⚠️", "color": _YELLOW,
-            "title": f"Gargalo crítico: {lbl} abaixo do benchmark",
-            "body":  f"{lbl} de {val:.2f}% está menos da metade do benchmark ({ref:.1f}%). "
-                     f"Dobrar essa taxa sem mudar spend poderia duplicar as conversões.",
-            "ask":   f"Auditar landing page e UX — potencial de +{fmt_number(m['ga4c'])} conversões/período",
-        })
-
-    if not decisions:
-        decisions.append({
-            "icon": "📊", "color": _MUTED,
-            "title": "Aguardando dados suficientes",
-            "body":  "Conecte GA4 e certifique-se de ter ao menos 14 dias de dados para gerar recomendações.",
-            "ask":   "Verificar integração GA4 e UTMs",
-        })
-
-    st.markdown("**Decisões recomendadas**")
-    cols = st.columns(min(len(decisions), 3))
-    for col, d in zip(cols, decisions[:3]):
-        col.markdown(f"""
-        <div style="background:{_CARD};border:1px solid {d['color']}33;border-radius:12px;
-                    padding:18px;height:100%;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-            <span style="font-size:18px">{d['icon']}</span>
-            <p style="font-size:13px;font-weight:700;color:{_TEXT};margin:0">{d['title']}</p>
-          </div>
-          <p style="font-size:12px;color:{_MUTED};line-height:1.6;margin-bottom:12px">{d['body']}</p>
-          <div style="border-top:1px solid {_BORDER};padding-top:10px">
-            <p style="font-size:11px;color:{d['color']};font-weight:700;margin:0">→ {d['ask']}</p>
-          </div>
-        </div>""", unsafe_allow_html=True)
-
-
 # ── Entry point ───────────────────────────────────────────────
 def render(
     df_merged:   pd.DataFrame,
@@ -420,7 +335,6 @@ def render(
     with col_r:
         _render_channel_revenue(df_platform)
     st.divider()
-    _render_the_ask(m, df_platform)
     st.caption(
         f"Atribuição: last-click via GA4 · "
         f"Invest. {fmt_currency(m['spd'])} · "
