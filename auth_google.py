@@ -18,11 +18,16 @@ CLIENT_SECRETS = Path(__file__).parent / "client_secret.json"
 
 creds = None
 if TOKEN_FILE.exists():
-    creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
-    # Se o token não tem todos os escopos necessários, força nova autorização
-    if creds and creds.scopes and not set(SCOPES).issubset(set(creds.scopes)):
-        print("Escopos insuficientes — forçando nova autorização.")
+    import json as _json
+    # Lê os escopos REAIS gravados no arquivo (não os pedidos) para detectar
+    # tokens antigos sem analytics.readonly. Passar SCOPES ao construtor faz
+    # creds.scopes refletir o que foi pedido, mascarando o que o token tem.
+    _saved = set(_json.loads(TOKEN_FILE.read_text()).get("scopes", []))
+    if not set(SCOPES).issubset(_saved):
+        print(f"Escopos insuficientes no token ({sorted(_saved)}) — forçando nova autorização.")
         creds = None
+    else:
+        creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
 
 if not creds or not creds.valid:
     if creds and creds.expired and creds.refresh_token:

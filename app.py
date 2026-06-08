@@ -14,6 +14,7 @@ import components.pre_click as pre_click
 import components.post_click as post_click
 import components.cross_data as cross_data
 import components.executive as executive
+import components.ga4_overview as ga4_overview
 
 st.set_page_config(
     page_title="Media Dashboard",
@@ -229,14 +230,18 @@ else:
 
 
 # ── Tabs ──────────────────────────────────────────────────────
-tab_exec, tab_detail, tab_week = st.tabs([
+tab_exec, tab_ga4, tab_detail, tab_week = st.tabs([
     "📊  Executivo",
+    "🌐  GA4 · Origem/Mídia",
     "🔍  Detalhe por campanha",
     "📅  Semana vs Semana",
 ])
 
 with tab_exec:
     executive.render(df_merged, _ga4_display, df_daily, df_platform)
+
+with tab_ga4:
+    ga4_overview.render(df_ga4)
 
 with tab_detail:
     if df_merged.empty:
