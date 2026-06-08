@@ -86,10 +86,19 @@ def fetch_campaign_stats(start_date: date, end_date: date) -> pd.DataFrame:
     gc = gspread.authorize(creds)
     spreadsheet = gc.open_by_key(spreadsheet_id)
 
-    # Usa a primeira aba (Página1) por padrão, ou o nome definido no .env
-    sheet_name = os.environ.get("GOOGLE_ADS_SHEET_NAME", "")
+    # Usa a primeira aba por padrão, ou o nome definido no .env.
+    # Match tolerante a espaços/maiúsculas — o add-on do Google Ads cria a aba
+    # com espaço no fim (ex.: "Google Ads ").
+    sheet_name = os.environ.get("GOOGLE_ADS_SHEET_NAME", "").strip()
     if sheet_name:
-        worksheet = spreadsheet.worksheet(sheet_name)
+        target = sheet_name.lower()
+        worksheet = next(
+            (ws for ws in spreadsheet.worksheets() if ws.title.strip().lower() == target),
+            None,
+        )
+        if worksheet is None:
+            disponiveis = [ws.title for ws in spreadsheet.worksheets()]
+            raise RuntimeError(f"Aba '{sheet_name}' não encontrada. Abas disponíveis: {disponiveis}")
     else:
         worksheet = spreadsheet.get_worksheet(0)
 
@@ -97,8 +106,16 @@ def fetch_campaign_stats(start_date: date, end_date: date) -> pd.DataFrame:
     if len(all_values) < 2:
         return pd.DataFrame()
 
-    raw_headers = [h.strip().lower() for h in all_values[0]]
-    data_rows = all_values[1:]
+    # O add-on do Google Ads insere metadados no topo ("Last Run On", "Account",
+    # "Summary"/"Total"). Localiza a linha de cabeçalho real (a que começa com
+    # Day/Date/Dia). As linhas-lixo restantes caem depois no dropna por data.
+    header_idx = next(
+        (i for i, row in enumerate(all_values)
+         if row and row[0].strip().lower() in ("day", "date", "dia", "data")),
+        0,
+    )
+    raw_headers = [h.strip().lower() for h in all_values[header_idx]]
+    data_rows = all_values[header_idx + 1:]
 
     rows = []
     for row in data_rows:
