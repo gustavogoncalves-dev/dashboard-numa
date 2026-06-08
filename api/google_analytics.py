@@ -1,8 +1,6 @@
 import os
 import json
-import tempfile
 import pandas as pd
-from pathlib import Path
 from datetime import date
 from google.analytics.data_v1beta import BetaAnalyticsDataClient
 from google.analytics.data_v1beta.types import (
@@ -13,22 +11,15 @@ from google.analytics.data_v1beta.types import (
 )
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
-
-TOKEN_FILE = Path(__file__).parent.parent / ".google_token.json"
+from utils.google_token import get_token_text, token_file
 
 
 def _build_client() -> BetaAnalyticsDataClient:
-    if TOKEN_FILE.exists():
-        token_path = TOKEN_FILE
-    else:
-        token_json = os.environ.get("GOOGLE_TOKEN_JSON", "")
-        if not token_json:
-            raise RuntimeError("GOOGLE_TOKEN_JSON não configurado e .google_token.json não encontrado")
-        tmp = Path(tempfile.mktemp(suffix=".json"))
-        tmp.write_text(token_json)
-        token_path = tmp
+    text = get_token_text()
+    if not text:
+        raise RuntimeError("GOOGLE_TOKEN_JSON não configurado e .google_token.json não encontrado")
 
-    raw = json.loads(token_path.read_text())
+    raw = json.loads(text)
 
     # from_authorized_user_info parseia expiry corretamente — evita usar token expirado
     creds = Credentials.from_authorized_user_info(raw)
@@ -36,7 +27,9 @@ def _build_client() -> BetaAnalyticsDataClient:
     # Refresh sempre que inválido OU expirado
     if not creds.valid or creds.expired:
         creds.refresh(Request())
-        token_path.write_text(creds.to_json())
+        # Persiste só se houver arquivo local (no deploy o token vem de secret)
+        if token_file().exists():
+            token_file().write_text(creds.to_json())
 
     return BetaAnalyticsDataClient(credentials=creds)
 

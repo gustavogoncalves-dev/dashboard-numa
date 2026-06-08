@@ -1,5 +1,4 @@
 import os
-import json
 import tempfile
 import pandas as pd
 from datetime import date
@@ -8,6 +7,7 @@ import gspread
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from utils.google_token import get_token_text
 
 _SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
@@ -42,13 +42,16 @@ _COL_MAP = {
 
 
 def _get_credentials() -> Credentials:
-    token_json = os.environ.get("GOOGLE_TOKEN_JSON", "")
-    if not _TOKEN_FILE.exists() and token_json:
-        tmp = Path(tempfile.mktemp(suffix=".json"))
-        tmp.write_text(token_json)
-        token_path = tmp
-    else:
+    if _TOKEN_FILE.exists():
         token_path = _TOKEN_FILE
+    else:
+        text = get_token_text()  # aceita JSON cru ou base64 via GOOGLE_TOKEN_JSON
+        if text:
+            tmp = Path(tempfile.mktemp(suffix=".json"))
+            tmp.write_text(text)
+            token_path = tmp
+        else:
+            token_path = _TOKEN_FILE
 
     creds = None
     if token_path.exists():
