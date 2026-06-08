@@ -2,6 +2,8 @@
 *.json
 *.bak
 !.env.example
+.streamlit/secrets.toml
+secrets_para_streamlit.txt
 __pycache__/
 *.pyc
 .venv/
