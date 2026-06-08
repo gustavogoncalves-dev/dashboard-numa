@@ -151,46 +151,49 @@ def _render_funnel(m: dict) -> None:
 
     st.markdown("**Do awareness à conversão**")
 
-    fig = go.Figure(go.Funnel(
-        y=[s[0] for s in stages],
-        x=[s[1] for s in stages],
-        text=[f"{fmt_number(s[1])}<br><span style='font-size:11px'>{s[2]}</span>" for s in stages],
-        textposition="inside",
-        textinfo="text",
-        marker=dict(color=[s[3] for s in stages], line=dict(width=0)),
-        connector=dict(line=dict(color=_BORDER, width=2)),
-    ))
-    fig.update_layout(**_L(
-        height=300,
-        margin=dict(t=8, b=8, l=0, r=0),
-        showlegend=False,
-    ))
-    st.plotly_chart(fig, use_container_width=True)
+    maxv = max(s[1] for s in stages)
 
-    # Taxas de conversão entre etapas
-    labels_map = {
-        ("Impressões",  "Cliques"):      "CTR",
-        ("Cliques",     "Sessões GA4"):  "Clique → Sessão",
-        ("Sessões GA4", "Conversões"):   "Taxa de Conv.",
-    }
-    rates = []
-    for i in range(len(stages) - 1):
-        v1, v2 = stages[i][1], stages[i+1][1]
-        key = (stages[i][0], stages[i+1][0])
-        lbl = labels_map.get(key, f"{stages[i][0]}→{stages[i+1][0]}")
-        rates.append((lbl, v2/v1*100 if v1 > 0 else 0))
+    # Taxas entre etapas + gargalo (maior queda)
+    rate_lbls = ["CTR", "Clique → Sessão", "Sessão → Conversão"]
+    rates = [
+        (stages[i + 1][1] / stages[i][1] * 100 if stages[i][1] > 0 else 0)
+        for i in range(len(stages) - 1)
+    ]
+    worst = min(range(len(rates)), key=lambda i: rates[i]) if len(rates) > 1 else -1
 
-    # Maior queda = gargalo
-    if rates:
-        worst_idx = min(range(len(rates)), key=lambda i: rates[i][1])
-        cols = st.columns(len(rates))
-        for i, (col, (lbl, rate)) in enumerate(zip(cols, rates)):
-            is_worst = (i == worst_idx and len(rates) > 1)
-            col.metric(
-                label=f"{'⚠ ' if is_worst else ''}{lbl}",
-                value=f"{rate:.2f}%",
-                help="Maior gargalo do funil" if is_worst else None,
+    html = ['<div style="margin:6px 0 2px;">']
+    for i, (name, val, sub, color) in enumerate(stages):
+        w = 38 + 62 * (val / maxv)   # afunila mas mantém largura mínima legível
+        html.append(
+            f'<div style="display:flex;justify-content:center;">'
+            f'<div style="width:{w:.1f}%;min-width:260px;'
+            f'background:linear-gradient(90deg,{color}1f,{color});'
+            f'border:1px solid {color}55;border-radius:12px;padding:13px 20px;margin:5px 0;'
+            f'display:flex;align-items:center;justify-content:space-between;gap:14px;'
+            f'box-shadow:0 1px 2px rgba(0,0,0,.25);">'
+            f'<span style="font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;'
+            f'letter-spacing:.05em;white-space:nowrap;">{name}</span>'
+            f'<span style="font-size:1.5rem;font-weight:900;color:#fff;'
+            f'font-variant-numeric:tabular-nums;line-height:1;">{fmt_number(val)}</span>'
+            f'<span style="font-size:11px;color:#ffffffcc;white-space:nowrap;">{sub}</span>'
+            f'</div></div>'
+        )
+        if i < len(stages) - 1:
+            r, is_worst = rates[i], (i == worst)
+            lbl = rate_lbls[i] if i < len(rate_lbls) else ""
+            bg = "#3a1414" if is_worst else "#161b22"
+            fg = "#FCA5A5" if is_worst else _MUTED
+            tag = f"⚠ gargalo · {lbl}" if is_worst else lbl
+            html.append(
+                f'<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin:1px 0;">'
+                f'<span style="color:{_MUTED};font-size:12px;">▼</span>'
+                f'<span style="background:{bg};color:{fg};border:1px solid {fg}33;'
+                f'border-radius:20px;padding:2px 12px;font-size:11px;font-weight:700;'
+                f'font-variant-numeric:tabular-nums;">{r:.1f}%&nbsp; ·&nbsp; {tag}</span>'
+                f'</div>'
             )
+    html.append('</div>')
+    st.markdown("".join(html), unsafe_allow_html=True)
 
     # Receita separada (unidade diferente — dinheiro, não pessoas)
     if m["rev"] > 0:

@@ -9,7 +9,10 @@ load_dotenv()
 from api.google_ads import fetch_campaign_stats as fetch_google
 from api.meta_ads import fetch_campaign_stats as fetch_meta
 from api.google_analytics import fetch_session_stats as fetch_ga4
-from utils.data import merge_ads_with_ga4, aggregate_by_platform, aggregate_by_date
+from utils.data import (
+    merge_ads_with_ga4, aggregate_by_platform, aggregate_by_date,
+    build_platform_performance, build_daily_performance, _filter_paid,
+)
 import components.pre_click as pre_click
 import components.post_click as post_click
 import components.cross_data as cross_data
@@ -108,13 +111,15 @@ with st.sidebar:
             _labels = {
                 "exact":            ("badge-ok",   "GA4 ↔ Ads: nome exato"),
                 "normalized":       ("badge-warn", "GA4 ↔ Ads: nome normalizado"),
+                "hybrid":           ("badge-warn", "GA4 ↔ Ads: híbrido (parte casada, parte estimada)"),
                 "date_proportional":("badge-warn", "GA4 ↔ Ads: distribuição por data"),
                 "none":             ("badge-err",  "GA4 ↔ Ads: sem match"),
             }
             _cls, _txt = _labels.get(_method, ("badge-err", f"GA4 ↔ Ads: {_method}"))
             st.divider()
+            st.caption("Nota: a aba Executivo usa atribuição por origem/mídia do GA4, independente deste casamento.")
             st.markdown(f'<span class="{_cls}">{_txt}</span>', unsafe_allow_html=True)
-            if _method in ("date_proportional", "none"):
+            if _method in ("hybrid", "date_proportional", "none"):
                 with st.expander("Ver campanhas (Ads vs GA4)", expanded=False):
                     _dga4 = st.session_state.get("df_ga4", pd.DataFrame())
                     if not _dga4.empty and "campaign_name" in _dga4.columns:
@@ -238,7 +243,12 @@ tab_exec, tab_ga4, tab_detail, tab_week = st.tabs([
 ])
 
 with tab_exec:
-    executive.render(df_merged, _ga4_display, df_daily, df_platform)
+    # Executivo usa atribuição GA4 por origem/mídia (não depende de casar nomes):
+    # preserva a receita real do Google mesmo com Ads agregado / Meta enviando ID.
+    df_platform_exec = build_platform_performance(df_merged, df_ga4)
+    df_daily_exec = build_daily_performance(df_merged, df_ga4)
+    ga4_paid_exec = _filter_paid(df_ga4) if not df_ga4.empty else _ga4_display
+    executive.render(df_merged, ga4_paid_exec, df_daily_exec, df_platform_exec)
 
 with tab_ga4:
     ga4_overview.render(df_ga4)
