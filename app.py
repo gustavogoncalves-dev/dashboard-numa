@@ -91,6 +91,18 @@ with st.sidebar:
     st.divider()
     run_btn = st.button("🔄  Atualizar dados", type="primary", use_container_width=True)
 
+    reauth_btn = st.button("🔑  Reautorizar Google", use_container_width=True,
+                           help="Use quando aparecer erro 'invalid_grant'. Abre o navegador para fazer login novamente.")
+    if reauth_btn:
+        with st.spinner("Abrindo navegador para autorização..."):
+            from utils.google_token import reauth
+            try:
+                reauth()
+                _fetch_all.clear()
+                st.success("Reautorizado com sucesso! Clique em Atualizar dados.")
+            except Exception as e:
+                st.error(f"Erro na reautorização: {e}")
+
     if "source_status" in st.session_state:
         st.divider()
         st.caption("**Status das fontes**")

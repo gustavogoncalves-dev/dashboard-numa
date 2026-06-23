@@ -7,7 +7,8 @@ import gspread
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-from utils.google_token import get_token_text
+from google.auth.exceptions import RefreshError
+from utils.google_token import get_token_text, reauth
 
 _SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
@@ -58,14 +59,17 @@ def _get_credentials() -> Credentials:
         creds = Credentials.from_authorized_user_file(str(token_path), _SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            token_path.write_text(creds.to_json())
+            try:
+                creds.refresh(Request())
+                token_path.write_text(creds.to_json())
+            except RefreshError:
+                # Token revogado ou expirado (app em modo Testing expira em 7 dias).
+                # Reabre o navegador para reautorizar automaticamente.
+                reauth()
+                creds = Credentials.from_authorized_user_file(str(_TOKEN_FILE), _SCOPES)
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                str(_CLIENT_SECRETS_FILE), _SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-            token_path.write_text(creds.to_json())
+            reauth()
+            creds = Credentials.from_authorized_user_file(str(_TOKEN_FILE), _SCOPES)
     return creds
 
 

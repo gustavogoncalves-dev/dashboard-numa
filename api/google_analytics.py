@@ -11,7 +11,8 @@ from google.analytics.data_v1beta.types import (
 )
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
-from utils.google_token import get_token_text, token_file
+from google.auth.exceptions import RefreshError
+from utils.google_token import get_token_text, token_file, reauth
 
 
 def _build_client() -> BetaAnalyticsDataClient:
@@ -26,7 +27,13 @@ def _build_client() -> BetaAnalyticsDataClient:
 
     # Refresh sempre que inválido OU expirado
     if not creds.valid or creds.expired:
-        creds.refresh(Request())
+        try:
+            creds.refresh(Request())
+        except RefreshError:
+            # Token revogado/expirado: reabre o navegador para reautorizar.
+            reauth()
+            raw = json.loads(token_file().read_text())
+            creds = Credentials.from_authorized_user_info(raw)
         # Persiste só se houver arquivo local (no deploy o token vem de secret)
         if token_file().exists():
             token_file().write_text(creds.to_json())

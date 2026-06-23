@@ -30,10 +30,15 @@ if TOKEN_FILE.exists():
         creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
 
 if not creds or not creds.valid:
+    refreshed = False
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        print("Token renovado com sucesso.")
-    else:
+        try:
+            creds.refresh(Request())
+            print("Token renovado com sucesso.")
+            refreshed = True
+        except Exception as e:
+            print(f"Refresh falhou ({e}) — abrindo navegador para novo login.")
+    if not refreshed:
         flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_SECRETS), SCOPES)
         creds = flow.run_local_server(port=0, prompt="consent")
         print("Autorização concluída com sucesso.")

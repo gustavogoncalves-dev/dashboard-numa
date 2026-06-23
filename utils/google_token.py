@@ -12,6 +12,13 @@ import base64
 from pathlib import Path
 
 _TOKEN_FILE = Path(__file__).parent.parent / ".google_token.json"
+_CLIENT_SECRETS = Path(__file__).parent.parent / "client_secret.json"
+
+_SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/analytics.readonly",
+]
 
 
 def token_file() -> Path:
@@ -46,3 +53,21 @@ def get_token_text() -> str:
 
     # Devolve como veio para o chamador estourar com mensagem clara
     return raw
+
+
+def reauth() -> None:
+    """Abre o navegador para reautorizar o Google OAuth e salva o novo token.
+
+    Chamado automaticamente quando o refresh token é inválido (invalid_grant).
+    Isso ocorre quando o app está em modo "Testing" no Google Cloud Console
+    (tokens expiram em 7 dias) ou quando o acesso foi revogado manualmente.
+    """
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    _TOKEN_FILE.unlink(missing_ok=True)
+    flow = InstalledAppFlow.from_client_secrets_file(
+        str(_CLIENT_SECRETS), _SCOPES, redirect_uri="http://localhost"
+    )
+    creds = flow.run_local_server(port=0, prompt="consent")
+    _TOKEN_FILE.write_text(creds.to_json())
+    return creds
